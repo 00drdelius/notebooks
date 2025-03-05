@@ -1,0 +1,23 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${default}",
+                "/home/cmcc/miniconda3/envs/deploy/include",
+                "/home/cmcc/miniconda3/envs/deploy/lib/python3.10/site-packages/torch/include",
+                "/home/cmcc/miniconda3/envs/deploy/lib/python3.10/site-packages/torch_npu/include",
+                "/usr/local/Ascend/ascend-toolkit/latest/include"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/g++",
+            "cStandard": "c17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "clang-arm64",
+            "compileCommands": [
+                "${workspaceFolder}/dlinfer/_skbuild/linux-aarch64-3.10/cmake-build/compile_commands.json"
+            ]
+        }
+    ],
+    "version": 4
+}
