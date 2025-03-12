@@ -10,7 +10,8 @@ execute_process(
 )
 
 # save COMMAND output into Torch_npu_ROOT
-# cache entry like <PackageName>_ROOT stores paths to search for find_package, find_library.
+# cache entry like <PackageName>_ROOT stores paths to be searched by find_package, find_library and find_path
+#   if PATHS in commands `find_library` and `find_path` is not specified.
 # find_library: searchs libraries from <PackageName>/lib or <PackageName>/lib64 or <PackgeName>/lib/<arch>.
 # 注意：如果定义了<PackageName>_DIR cmake变量，那么<PackageName>_ROOT 不起作用
 # see https://cmake.org/cmake/help/latest/command/find_package.html
@@ -31,6 +32,7 @@ execute_process(
 # find <PackageName>Config.cmake or Find<PackageName>.cmake to load external cmake config.
 # see https://cmake.org/cmake/help/latest/command/find_package.html for more info
 find_package(Torch REQUIRED)
+message(STATUS "Found Torch: TORCH_LIBRARY: ${TORCH_LIBRARY}, TORCH_INCLUDE_DIRS: ${TORCH_INCLUDE_DIRS}")
 
 # Attention! There's no any Torch_npuConfig.cmake in Torch_npu_ROOT. This command searches cmake/FindTorch_npu.cmake
 # So do the next two `find_package` for CANNToolkit and ATB.
