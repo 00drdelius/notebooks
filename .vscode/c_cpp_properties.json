@@ -4,6 +4,7 @@
             "name": "Linux",
             "includePath": [
                 "${default}",
+                "/root/workspace/notebooks/npunotebooks/include",
                 "/home/cmcc/miniconda3/envs/deploy/include",
                 "/home/cmcc/miniconda3/envs/deploy/lib/python3.10/site-packages/torch/include",
                 "/home/cmcc/miniconda3/envs/deploy/lib/python3.10/site-packages/torch_npu/include",
