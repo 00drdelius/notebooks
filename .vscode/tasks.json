@@ -3,7 +3,25 @@
 	"tasks": [
 		{
 			"type": "cppbuild",
-			"label": "C/C++: g++ build active file for debug",
+			"label": "C/C++: g++ general build active file",
+			"command": "/usr/bin/g++",
+			"args": [
+				"-fdiagnostics-color=always",
+				"-g",
+				// "-I/usr/include/x86_64-linux-gnu",
+                // "-I/usr/include/x86_64-linux-gnu/c++/11",
+				// "-L/usr/lib/x86_64-linux-gnu",
+				"${file}",
+				"-o",
+				"${fileDirname}/${fileBasenameNoExtension}"
+			],
+			"options": {
+				"cwd": "${fileDirname}",
+			}
+		},
+		{
+			"type": "cppbuild",
+			"label": "C/C++: g++ build torch_npu active file",
 			"command": "/usr/bin/g++",
 			"args": [
 				"-fdiagnostics-color=always",

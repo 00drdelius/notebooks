@@ -77,7 +77,24 @@
         "typeindex": "cpp",
         "typeinfo": "cpp",
         "valarray": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "__nullptr": "cpp",
+        "__bit_reference": "cpp",
+        "__functional_base": "cpp",
+        "__node_handle": "cpp",
+        "__memory": "cpp",
+        "filesystem": "cpp",
+        "locale": "cpp",
+        "__config": "cpp"
     },
-    "C_Cpp.default.compilerPath": "/usr/bin/g++"
+    "C_Cpp.default.compilerPath": "/usr/bin/g++",
+    "C_Cpp.autocomplete": "default",
+    "C_Cpp.default.intelliSenseMode": "linux-clang-x86",
+    "C_Cpp.intelliSenseCacheSize": 10240,
+    "[cuda-cpp]": {
+        "editor.wordBasedSuggestions": "allDocuments",
+        "editor.semanticHighlighting.enabled": true,
+        "editor.stickyScroll.defaultModel": "foldingProviderModel",
+        "editor.suggest.insertMode": "replace"
+    },
 }
