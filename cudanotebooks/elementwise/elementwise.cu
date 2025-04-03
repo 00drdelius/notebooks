@@ -9,6 +9,9 @@
 #include <cuda_bf16.h>
 #include <cuda_fp8.h>
 
+#include <torch/types.h>
+#include <torch/extension.h>
+
 #define WARP_SIZE 32
 
 /**
@@ -35,7 +38,6 @@ __global__ void elementwise_add_fp32_kernel(const float *a, const float *b, floa
 
 // -------------------------------------- FP32 -------------------------------------- 
 // ElementWise Add  
-// grid(N/256), block(256)
 // a: Nx1, b: Nx1, c: Nx1, c = elementwise_add(a, b)
 __global__ void elementwise_add_fp32_kernel(const float *a, const float *b, float *c, int N)
 {
@@ -45,24 +47,30 @@ __global__ void elementwise_add_fp32_kernel(const float *a, const float *b, floa
 
 void elementwise_add_fp32(const float *a, const float *b,float *c, int N)
 {
-    dim3 block_size(16), grid_size(N/16);
+    dim3 block_size(16);
+    dim3 grid_size((N+block_size.x-1)/block_size.x); //向上取整
     elementwise_add_fp32_kernel<<<grid_size, block_size>>>(a, b, c, N);
+    cudaError_t error_code = cudaGetLastError();
+    if (error_code!=cudaSuccess){
+        std::cout
+        << "File: " << __FILE__ << "\n"
+        << "Line: " << __LINE__ << "\n"
+        << "Error Code: " << error_code << "\n"
+        << "Error String: " << cudaGetErrorString(error_code) << std::endl;
+    }
 }
-
-
-// --------------------- PyTorch bindings for custom kernel -----------------------
-#include <torch/types.h>
-#include <torch/extension.h>
 
 void torch_add_fp32(const torch::Tensor &a,const torch::Tensor &b, torch::Tensor &c, int64_t N)
 {
     elementwise_add_fp32(
-        (const float*)a.data_ptr(),
-        (const float*)b.data_ptr(),
-        (float*)c.data_ptr(),
+        a.data_ptr<float>(),
+        b.data_ptr<float>(),
+        c.data_ptr<float>(),
         N
     );
 }
+
+// --------------------- PyTorch bindings for custom kernel -----------------------
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
 {
@@ -73,4 +81,4 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
     );
 }
 
-TORCH_LIBRARY(custom_ops, m){m.def("add_fp32",torch_add_fp32);}
+// TORCH_LIBRARY(custom_ops, m){m.def("add_fp32",torch_add_fp32);}
