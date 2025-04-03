@@ -8,7 +8,6 @@
                 "/usr/include/x86_64-linux-gnu/c++/11",
                 "/usr/local/cuda/include",
                 "/models/conda_envs/delius/include/python3.11",
-                "/models/conda_envs/delius/lib/python3.11/site-packages/torch",
                 "/models/conda_envs/delius/lib/python3.11/site-packages/torch/include/torch/csrc/api/include",
                 // "/root/workspace/notebooks/npunotebooks/include",
                 // "/home/cmcc/miniconda3/envs/deploy/include",
