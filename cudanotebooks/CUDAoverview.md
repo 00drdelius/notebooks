@@ -66,6 +66,13 @@ __global__ void elementwise_add_f32_kernel(float* a, float* b, float* c, int N) 
 }
 ```
 
+2. `grid_size`与`block_size`设置推荐
+由下面两个缘由：
+- 现代 NVIDIA GPU 架构（如Volta/Turing/Ampere）的每个线程块最多支持**1024个线程**；而从 Ampere 架构的 GA102 GPU （有点复杂，略过）开始每个SM支持最高**2048个线程**，如果设置`dim3 block_size(32,32)`也就是一个线程块直接 1024 个线程，这样一个 SM 从线程数考虑只能驻留 2 个线程块，如果核函数需要较多寄存器或共享内存，可能进一步减少驻留块数，会降低 SM 的并行块数量，无法充分利用一个 SM 的并行效率
+- 在 GPU 中，执行相同指令的线程的基本单位是线程束（warp），多个 warp 才构成一个线程块（block）。而一个 warp 一般由32个 blocks 构成。因此`block_size`最好设置成 32 的倍数
+
+推荐`block_size`总线程数设置为 32 的倍数，一般为`(8,8)`，`(16,16)`或`(32,32)`，一般推荐`(16,16)`。
+
 ### 编译基础
 编译 CUDA 程序需要使用 Nvidia 官方提供的编译器 nvcc。nvcc 会先将所有源代码先分离成主机代码和设备代码，主机代码完整支持 C++ 语法，设备代码只部分支持 C++ 语法。nvcc 先将设备代码编译为 PTX（parallel thread execution）伪汇编代码，再将 PTX 代码编译为二进制的 cubin 目标代码。
 

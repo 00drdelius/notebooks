@@ -31,17 +31,16 @@ GPU设计目标是最大化吞吐量 (Throughout)，比单任务执行快慢，�
 ![CPU vs GPU2](./assets/cpu-vs-gpu2.jpg)
 
 ## 内部架构
-典型的GPU处理单元层次：thread < wrap < block < grid
+典型的GPU处理单元层次：thread < warp < block < grid
 
 ### **thread**
-线程，每个thread都有自己的寄存器（registers）与局部内存（local memory），且只能被自己访问，不同的线程处理器之间是彼此独立的。
+线程，每个thread都有自己的寄存器（registers，包括指令地址计数器PC+状态寄存器PSW等）与局部内存（local memory）。这些资源只能被自己访问，而且在不同的线程处理器之间是彼此独立的（这些资源会在线程被调度到 SM 上时分配）
 
-### **wrap**
+### **warp**
 线程束，硬件级别上的调度单位，一个 warp 包含32个并行 thread，这些 thread 以不同数据资源执行相同的指令。
 
 ### **block**
 线程块，多个 threads 与 一块共享内存(Shared Memory) 即构成一块block（线程块）
-- 一个 block 可以对应一个 SM, Streaming Multiprocessor（稍后会提及）  
 - 多核处理器里边的多个线程处理器(SP)是互相并行的，不互相影响
 - block 间也是并行执行，无法通信，也没有执行顺序
 - block 内各 thread 间的通信可以通过 block 的共享内存进行
@@ -53,14 +52,15 @@ GPU设计目标是最大化吞吐量 (Throughout)，比单任务执行快慢，�
 - 当一个 kernel 被执行时，网格中的线程块被分配到 SM (多核处理器) 上，一个线程块的 threads 只能在一个SM 上调度，SM 一般可以调度多个线程块，大量的 threads 可能被分到不同的 SM 上。每个 thread 拥有它自己的程序计数器和状态寄存器，并且用该线程自己的数据执行指令，这就是所谓的 Single Instruction Multiple Thread (SIMT)
 
 ### 注
-- 每个 thread 都有自己的一份 register 和 local memory 的空间。
-- 同一个 block 中的每个 thread 则有共享的一份 share memory。
-- 此外，所有的 threads (包括不同 block 的 threads) 都共享一份 global memory。
+- 每个 thread 都有自己的一份 register 和 local memory 的空间
+- 同一个 block 中的每个 thread 则有共享的一份 share memory
+- 此外，所有的 threads (包括不同 block 的 threads) 都共享一份 global memory
+- 上述资源都通过 SM 的调度分配
 - 不同的 grid 则有各自的 global memory。global memory即人们常说的显存
 
 从软件的角度讲：
 1. 线程处理器 (SP, Streaming Processor) 对应线程 (thread)；
-2. 多核处理器 (SM, Streaming Multiprocessor) 对应线程块 (thread block)；
+2. 多核处理器 (SM, Streaming Multiprocessor) 对应线程块 (thread block)。但不是一一对应的关系，现在一个SM已经可以驻留多个线程块；
 3. 设备端 (device) 对应线程块组合体 (grid)
 
 ### 上述细节如下架构图
@@ -138,11 +138,12 @@ L2 缓存可以被所有 SM 访问，速度比全局内存快；L1 缓存用于�
 
 ### 流处理器：SM与SP  
 - SP: streaming processor; SM: streaming multiprcessor  
+SP 是单线程的基本处理器；SM 是总的资源调度处理器  
 从 G80 提出的概念，SM 中文称流式多处理器，核心组件包括CUDA核心、共享内存、寄存器等。SM包含许多为线程执行数学运算的Core，是 NVIDA 的核心。  
 在CUDA中，可以并发地执行数百个线程。一个 block 上的线程是放在同一个 SM，一个 SM 的有限 Cache 制约了每个 block 的线程数量。
 
-主要包括:
-- CUDA Core: 向量运行单元 (FP32-FPU、FP64-DPU、INT32-ALU);最开始叫SP(Streaming Processor)， 是GPU最基本的处理单元，在fermi架构开始被叫做CUDA core。Volta 架构时期取消了CUDA Core，变成了单独的FPU 和 ALU；
+SM 主要包括:
+- CUDA Core: 向量运行单元 (FP32-FPU、FP64-DPU、INT32-ALU);最开始叫SP(Streaming Processor)， 是GPU最基本的处理单元，在 fermi 架构开始被叫做CUDA core。Volta 架构时期取消了CUDA Core，变成了单独的FPU 和 ALU；
 - Tensor Core: 张量运算单元(FP16、BF16、INT8、INT4)；
 - Special Function Units: 特殊函数单元 SFU(超越函数和数学函数，e.g. 反平方根、正余弦等)；
 - Warp Scheduler: 线程束调度器(XX Thread / clock)；
@@ -153,3 +154,18 @@ L2 缓存可以被所有 SM 访问，速度比全局内存快；L1 缓存用于�
 
 > 其中 Tensor Core 是从 Volta 架构推出来的、混合精度（使用半精度(FP16)作为输入和输出，使用全精度(FP32)进行中间结果计算）的、将累加和累乘放在一起的计算硬件。所以 GPU 上有 Tensor Core 是使用混合精度训练加速的必要条件  
 > 混合精度：![mixed precision](./assets/mixed_precision.jpg)
+
+例：在 NVIDIA H100（Hopper架构）上：
+- 一个 block 最多处理 1024个线程
+- 每个SM最多可以处理32个 block ；或64个 warp
+- 每个SM有65536个寄存器。要同时执行2048个线程，每个线程最多可以有32个寄存器（65536/2048 = 32）
+- 第四代Tensor Core：H100的TensorCore计算能力相较于A100提升6倍，这里包括2x的MMA计算效率提升（以FP8来算的话就是4x的算力提升），更多的SM数量（132 vs 108 1.22x）和更高的SM频率（1.3x）
+- DPX指令：7x的动态规划算法效率提升
+- 3倍的FP64和FP32算力提升：包括单SM 2x的Cuda Core数量提升，以及SM数量和频率的提升
+- Thread Block Cluster：一个新的任务切分纬度，Grid->TBC->Block->Thread，使得一个GPC中的多个SM之间可以协作同步，完成更大颗粒度的计算
+- 分布式Shared Memory：得益于GPC中SM to SM交换网络，允许SM和SM之间进行load/store/atomic等操作，变相提升了共享内存的大小和利用率
+- TMA：Tensor Memory Accelerator提供了一种异步数据传输机制，在Ampere的基础上，使能了更高效的地址计算和数据块搬移。同时，也提供了一种异步传输栅栏来同步原子数据移动
+- Shared memory ＆ L1：256KB（Shared Mem Max Configure 228KB），是A100（192KB）的1.33倍
+
+NVIDIA H100 SM图例：
+![NVIDIA H100](./assets/NVIDIA-H100-SM.jpg)

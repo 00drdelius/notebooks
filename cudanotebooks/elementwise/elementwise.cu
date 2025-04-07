@@ -34,8 +34,6 @@
 #define LDST128BITS(value) (reinterpret_cast<float4*>(&(value))[0])
 
 
-__global__ void elementwise_add_fp32_kernel(const float *a, const float *b, float *c, int N);
-
 // -------------------------------------- FP32 -------------------------------------- 
 // ElementWise Add  
 // a: Nx1, b: Nx1, c: Nx1, c = elementwise_add(a, b)
@@ -45,11 +43,40 @@ __global__ void elementwise_add_fp32_kernel(const float *a, const float *b, floa
     if (idx<N) c[idx]=a[idx]+b[idx];
 }
 
-void elementwise_add_fp32(const float *a, const float *b,float *c, int N)
+__global__ void elementwise_add_fp32_dim2_kernel(const float *a, const float *b, float *c, int N)
 {
-    dim3 block_size(16);
-    dim3 grid_size((N+block_size.x-1)/block_size.x); //向上取整
-    elementwise_add_fp32_kernel<<<grid_size, block_size>>>(a, b, c, N);
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    
+}
+
+void elementwise_add_fp32(const torch::Tensor &a,const torch::Tensor &b, torch::Tensor &c, int64_t N)
+{
+    const int ndim = a.dim();
+    dim3 block_size;
+    dim3 grid_size;
+
+    if (ndim==1){
+        dim3 block_size(32);
+        dim3 grid_size((N+block_size.x-1)/block_size.x); //向上取整
+        elementwise_add_fp32_kernel<<<grid_size, block_size>>>(
+            a.data_ptr<float>(),
+            b.data_ptr<float>(),
+            c.data_ptr<float>(),
+            N
+        );
+    } else if (ndim==2)
+    {
+        dim3 block_size(32,32);
+        dim3 grid_size((N+block_size.x-1)/block_size.x, (N+block_size.y-1)/block_size.y);
+        elementwise_add_fp32_dim2_kernel<<<grid_size, block_size>>>(
+            a.data_ptr<float>(),
+            b.data_ptr<float>(),
+            c.data_ptr<float>(),
+            N
+        );
+    } else { }
+    
     cudaError_t error_code = cudaGetLastError();
     if (error_code!=cudaSuccess){
         std::cout
