@@ -30,7 +30,7 @@ cuda_lib = load(
 )
 print(cuda_lib)
 
-shape=(10,)
+shape=(3,5)
 
 def main():
     a=torch.randint(0,10,shape).cuda().float().contiguous()
@@ -38,8 +38,8 @@ def main():
     c=torch.zeros(shape).cuda().float().contiguous()
     print("[a] ",a)
     print("[b] ",b)
-    cuda_lib.torch_add_fp32(a,b,c,shape[0])
-    torch.cuda.synchronize()
+    cuda_lib.elementwise_add_fp32(a,b,c)
+    # torch.cuda.synchronize()
     print("[c] ",c.cpu())
 
 if __name__=='__main__':

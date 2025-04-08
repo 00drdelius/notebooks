@@ -11,6 +11,7 @@
 
 #include <torch/types.h>
 #include <torch/extension.h>
+#include <c10/util/Exception.h>
 
 #define WARP_SIZE 32
 
@@ -43,39 +44,26 @@ __global__ void elementwise_add_fp32_kernel(const float *a, const float *b, floa
     if (idx<N) c[idx]=a[idx]+b[idx];
 }
 
-__global__ void elementwise_add_fp32_dim2_kernel(const float *a, const float *b, float *c, int N)
+/**
+ * 2-dim torch::Tensor saves elements in mem is Row-Major Order(行优先),
+ * so it can be elementwise-added in cuda in one-dim.
+ */
+void elementwise_add_fp32(const torch::Tensor &a,const torch::Tensor &b, torch::Tensor &c)
 {
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    AT_ASSERTM(a.is_cuda(), "a must be a CUDA tensor");
+    AT_ASSERTM(b.is_cuda(), "b must be a CUDA tensor");
+    AT_ASSERTM(a.sizes()==b.sizes(),"size of a and b must be equal");
     
-}
-
-void elementwise_add_fp32(const torch::Tensor &a,const torch::Tensor &b, torch::Tensor &c, int64_t N)
-{
     const int ndim = a.dim();
-    dim3 block_size;
-    dim3 grid_size;
-
-    if (ndim==1){
-        dim3 block_size(32);
-        dim3 grid_size((N+block_size.x-1)/block_size.x); //向上取整
-        elementwise_add_fp32_kernel<<<grid_size, block_size>>>(
-            a.data_ptr<float>(),
-            b.data_ptr<float>(),
-            c.data_ptr<float>(),
-            N
-        );
-    } else if (ndim==2)
-    {
-        dim3 block_size(32,32);
-        dim3 grid_size((N+block_size.x-1)/block_size.x, (N+block_size.y-1)/block_size.y);
-        elementwise_add_fp32_dim2_kernel<<<grid_size, block_size>>>(
-            a.data_ptr<float>(),
-            b.data_ptr<float>(),
-            c.data_ptr<float>(),
-            N
-        );
-    } else { }
+    const int64_t N = a.numel();
+    dim3 block_size(16);
+    dim3 grid_size((N+block_size.x-1)/block_size.x);
+    elementwise_add_fp32_kernel<<<grid_size, block_size>>>(
+        a.data_ptr<float>(),
+        b.data_ptr<float>(),
+        c.data_ptr<float>(),
+        N
+    );
     
     cudaError_t error_code = cudaGetLastError();
     if (error_code!=cudaSuccess){
@@ -87,24 +75,14 @@ void elementwise_add_fp32(const torch::Tensor &a,const torch::Tensor &b, torch::
     }
 }
 
-void torch_add_fp32(const torch::Tensor &a,const torch::Tensor &b, torch::Tensor &c, int64_t N)
-{
-    elementwise_add_fp32(
-        a.data_ptr<float>(),
-        b.data_ptr<float>(),
-        c.data_ptr<float>(),
-        N
-    );
-}
-
 // --------------------- PyTorch bindings for custom kernel -----------------------
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
 {
     m.def(
-        "torch_add_fp32",
-        &torch_add_fp32,
-        "add two one-dim tensors into one"
+        "elementwise_add_fp32",
+        &elementwise_add_fp32,
+        "add two tensors into one"
     );
 }
 
