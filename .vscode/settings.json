@@ -97,4 +97,6 @@
         "editor.stickyScroll.defaultModel": "foldingProviderModel",
         "editor.suggest.insertMode": "replace"
     },
+    "C_Cpp.clang_format_path": "/home/gmcc/workspace/notebooks/.clang-format",
+    "C_Cpp.clang_format_style": "file"
 }

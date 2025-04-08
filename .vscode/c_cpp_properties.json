@@ -4,6 +4,7 @@
             "name": "Linux",
             "includePath": [
                 "${default}",
+                "/home/gmcc/workspace/notebooks/cudanotebooks/include",
                 "/usr/include/x86_64-linux-gnu",
                 "/usr/include/x86_64-linux-gnu/c++/11",
                 "/usr/local/cuda/include",
