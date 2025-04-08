@@ -74,13 +74,6 @@ torch::Tensor elementwise_add_fp32(const torch::Tensor &a,const torch::Tensor &b
 
 // --------------------- PyTorch bindings for custom kernel -----------------------
 
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
-{
-    m.def(
-        "elementwise_add_fp32",
-        &elementwise_add_fp32,
-        "add two tensors into one"
-    );
-}
+TORCH_PYBIND(elementwise_add_fp32)
 
 // TORCH_LIBRARY(custom_ops, m){m.def("add_fp32",torch_add_fp32);}
