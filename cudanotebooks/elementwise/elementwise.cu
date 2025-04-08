@@ -4,14 +4,15 @@
 #include <float.h>
 #include <vector>
 #include <algorithm>
-#include <cuda_runtime.h>
+// #include <cuda_runtime.h>
 #include <cuda_fp16.h>
 #include <cuda_bf16.h>
 #include <cuda_fp8.h>
 
 #include <torch/types.h>
-#include <torch/extension.h>
-#include <c10/util/Exception.h>
+// #include <torch/extension.h>
+
+#include <cuda_learning_utils.h>
 
 #define WARP_SIZE 32
 
@@ -48,31 +49,27 @@ __global__ void elementwise_add_fp32_kernel(const float *a, const float *b, floa
  * 2-dim torch::Tensor saves elements in mem is Row-Major Order(行优先),
  * so it can be elementwise-added in cuda in one-dim.
  */
-void elementwise_add_fp32(const torch::Tensor &a,const torch::Tensor &b, torch::Tensor &c)
+torch::Tensor elementwise_add_fp32(const torch::Tensor &a,const torch::Tensor &b)
 {
-    AT_ASSERTM(a.is_cuda(), "a must be a CUDA tensor");
-    AT_ASSERTM(b.is_cuda(), "b must be a CUDA tensor");
-    AT_ASSERTM(a.sizes()==b.sizes(),"size of a and b must be equal");
+    CHECK_TORCH_TENSOR_DEVICE(a);
+    CHECK_TORCH_TENSOR_DEVICE(b);
+    CHECK_TORCH_TENSORS_SIZES(a,b);
     
     const int ndim = a.dim();
     const int64_t N = a.numel();
+    torch::Tensor output = torch::empty_like(a);
+
     dim3 block_size(16);
     dim3 grid_size((N+block_size.x-1)/block_size.x);
     elementwise_add_fp32_kernel<<<grid_size, block_size>>>(
         a.data_ptr<float>(),
         b.data_ptr<float>(),
-        c.data_ptr<float>(),
+        output.data_ptr<float>(),
         N
     );
-    
-    cudaError_t error_code = cudaGetLastError();
-    if (error_code!=cudaSuccess){
-        std::cout
-        << "File: " << __FILE__ << "\n"
-        << "Line: " << __LINE__ << "\n"
-        << "Error Code: " << error_code << "\n"
-        << "Error String: " << cudaGetErrorString(error_code) << std::endl;
-    }
+    CUDA_ERROR_LOG
+
+    return output;
 }
 
 // --------------------- PyTorch bindings for custom kernel -----------------------

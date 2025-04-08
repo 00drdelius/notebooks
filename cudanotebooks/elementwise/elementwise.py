@@ -22,11 +22,9 @@ cuda_lib = load(
     ],
     extra_cflags=["-std=c++17"],
     verbose=True,
-    # extra_include_paths=[
-    #     "/models/conda_envs/delius/include/python3.11",
-    #     "/models/conda_envs/delius/lib/python3.11/site-packages/torch/include/torch/csrc/api/include",
-    #     "/models/conda_envs/delius/lib/python3.11/site-packages/torch/include"
-    # ]
+    extra_include_paths=[
+        "/home/gmcc/workspace/notebooks/cudanotebooks/include"
+    ]
 )
 print(cuda_lib)
 
@@ -35,12 +33,10 @@ shape=(3,5)
 def main():
     a=torch.randint(0,10,shape).cuda().float().contiguous()
     b=torch.randint(0,10,shape).cuda().float().contiguous()
-    c=torch.zeros(shape).cuda().float().contiguous()
     print("[a] ",a)
     print("[b] ",b)
-    cuda_lib.elementwise_add_fp32(a,b,c)
-    # torch.cuda.synchronize()
-    print("[c] ",c.cpu())
+    output:torch.Tensor=cuda_lib.elementwise_add_fp32(a,b)
+    print("[output] ",output.cpu())
 
 if __name__=='__main__':
     main()
