@@ -19,6 +19,7 @@ cuda_lib = load(
         "--expt-relaxed-constexpr",
         "--expt-extended-lambda",
         "--use_fast_math",
+        # "ptxas-options=-v"
     ],
     extra_cflags=["-std=c++17"],
     verbose=True,

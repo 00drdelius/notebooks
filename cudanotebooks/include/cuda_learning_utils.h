@@ -2,6 +2,8 @@
 #include <cuda_runtime.h>
 #include <torch/extension.h>
 
+#define WARP_SIZE 32
+
 #define STRINGFY(str) #str
 
 #define CHECK_TORCH_TENSOR_DEVICE(t)\
