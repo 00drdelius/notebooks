@@ -39,6 +39,7 @@
 // -------------------------------------- FP32 -------------------------------------- 
 // ElementWise Add  
 // a: Nx1, b: Nx1, c: Nx1, c = elementwise_add(a, b)
+// 其实也可以 a: NxM, b: NxM
 __global__ void elementwise_add_fp32_kernel(const float *a, const float *b, float *c, int N)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
