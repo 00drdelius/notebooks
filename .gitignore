@@ -3,3 +3,7 @@ build/**
 bin/**
 lib/**
 **/bin
+
+**/kernel_meta/
+fusion_result.json
+__pycache__/

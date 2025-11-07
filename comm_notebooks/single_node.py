@@ -7,12 +7,18 @@ os.environ['PYTORCH_NPU_ALLOC_CONF']="expandable_segments:True"
 os.environ['ASCEND_RT_VISIBLE_DEVICES']="0,1,2,3,4,5,6,7"
 
 import torch
-from torch_npu import torch_npu
 import torch.distributed as dist
+from torch.distributed import Backend
+from torch.distributed import GroupMember
 import torch.multiprocessing as mp
+from torch_npu import torch_npu
+# import torch_npu.distributed.distributed_c10d
 
+from rich.console import Console
 from utils import get_device
 
+console=Console(style="yellow")
+print=console.print
 # torch_npu.npu.mem_get_info
 print("[pid]", os.getpid(), "[device_count] ",torch_npu.npu.device_count())
 
@@ -69,67 +75,103 @@ def blocking_broadcast(dtype):
     world_size=dist.get_world_size()
     device=get_device()
 
-    assert world_size%2==0, "world size cannot be even digit."
+    assert world_size%2==0, "world size cannot be odd digit."
     
-    group1_ranks=[i for i in range(0,world_size//2)]
-    group2_ranks=[i for i in range(world_size//2, world_size)]
+    group_ranks=[i for i in range(0,world_size)]
     #XXX all ranks in `new_group` is sub group of main group, you may see it as a communication domain
-    group1 = dist.new_group(ranks=group1_ranks)
-    if rank in group1_ranks:
-        if rank==group1_ranks[0]:
-            tensor=torch.randint(0,10,(3,5),dtype=dtype,device=device)
-        else:
-            tensor=torch.empty(*(3,5),dtype=dtype, device=device)
-        dist.broadcast(tensor, src=group1_ranks[0],group=group1)
-        #XXXS the broadcast op might be launched in a different stream
-        # need to synchronize to make sure the tensor is ready
-        torch_npu.npu.synchronize()
+    group = dist.new_group(ranks=group_ranks)
+    if rank==group_ranks[0]:
+        tensor=torch.randint(0,10,(3,5),dtype=dtype,device=device)
+    else:
+        tensor=torch.empty(*(3,5),dtype=dtype, device=device)
+    dist.broadcast(tensor, src=group_ranks[0],group=group)
+
+    print(f'[rank{rank} after broadcast] {tensor}')
 
 
-    group2 = dist.new_group(ranks=group2_ranks)
-    if rank in group2_ranks:
-        if rank==group2_ranks[0]:
-            tensor=torch.randint(0,10,(3,5),dtype=dtype,device=device)
-        else:
-            tensor=torch.empty(*(3,5),dtype=dtype, device=device)
-        dist.broadcast(tensor, src=group2_ranks[0],group=group2)
-        torch_npu.npu.synchronize()
-    
-    print(f'[rank{rank}]', tensor)
+def group_blocking_broadcast(dtype, num_group=2):
+    "blocking broadcast in a group"
+    rank=dist.get_rank()
+    world_size=dist.get_world_size()
+    device=get_device()
+
+    def group_broadcast(group_ranks:list[int]):
+        if rank not in group_ranks:
+            return
+        try:
+            main_rank=group_ranks[0]
+            print(f"main_rank:{main_rank}")
+            if rank==main_rank:
+                print(f"create new group: {group_ranks}")
+            group=dist.new_group(group_ranks)
+            if rank==main_rank:
+                tensor=torch.randint(0,10,(3,5),dtype=dtype,device=device)
+                print(f"main rank{rank} creates tensor: {tensor}")
+            else:
+                tensor=torch.empty(*(3,5),dtype=dtype, device=device)
+                print(f"rank{rank} creates empty tensor: {tensor}")
+
+            dist.barrier(group)
+            print(f"src: {main_rank} broadcasts to group: {group_ranks}")
+            dist.broadcast(tensor, src=main_rank, group=group)
+            dist.barrier(group)
+            print(f'[rank{rank} after broadcast] {tensor}')
+        finally:
+            dist.destroy_process_group(group)
+
+    assert world_size%num_group==0, "world size should be divisble by num_group"
+    group_size=world_size//num_group
+
+    for i in range(0,world_size,group_size):
+        group_ranks=list(range(i, i+group_size))
+        group_broadcast(group_ranks)
+        dist.barrier()
 
 
 def init_process(rank, world_size, fn,dtype,backend):
+    setup(rank)
+    #NOTE It's really important to set rank device before `dist.init_process_group` or furthermore `dist.barrier`,
+    # otherwise you may encounter many strange bugs in distributed communication.
+    # you can also choose to set `device_id` in `dist.init_process_group` params.
+    torch_npu.npu.set_device(rank)
+
     #XXX dist.init_process_group is required to be executed in all rank processes
     try:
         dist.init_process_group( #XXX this is the main group
             backend,
-            # init_method="tcp://{ip}:{port}".format(ip=os.getenv('MASTER_ADDR'),port=os.getenv("MASTER_PORT")),
-            init_method="env://",
+            init_method="tcp://{ip}:{port}".format(ip=os.getenv('MASTER_ADDR'),port=os.getenv("MASTER_PORT")),
+            # init_method="env://",
             rank=rank, world_size=world_size
         )
         print("Rank %s is initialized" % rank)
+        print(f"current device:{torch_npu.npu.current_device()}")
+
         fn(dtype)
     except Exception as exc:
         print('[ERROR RAISED] ',exc)
     finally:
+        dist.barrier()
         if dist.is_initialized():
             print("destroy all processs group")
             dist.destroy_process_group()
+
+def setup(rank):
+    #XXX MASTER_ADDR && MASTER_PORT will be used when `init_method`=="env://" which is by default
+    # also you can setup init_method=="tcp://{ip}:{port}" manually. it functions same as env:// with MASTER_ADDR && MASTER_PORT set
+    # refer to https://docs.pytorch.org/docs/stable/distributed.html#tcp-initialization to see more details of tcp initialization
+    os.environ['MASTER_ADDR']="127.0.0.1"
+    os.environ['MASTER_PORT']="29500"
 
 if __name__ == '__main__':
     from shutil import rmtree
     if os.path.exists("/root/ascend"):
         rmtree("/root/ascend") #XXX clear logs to trace error if error raised
-    #XXX MASTER_ADDR && MASTER_PORT will be used when `init_method`=="env://" which is by default
-    # also you can setup init_method=="tcp://{ip}:{port}" manually. it functions same as env:// with MASTER_ADDR && MASTER_PORT set
-    # refer to https://docs.pytorch.org/docs/stable/distributed.html#tcp-initialization to see more details of tcp initialization
-    os.environ['MASTER_ADDR']="127.0.0.1"
-    os.environ['MASTER_PORT']="11451"
+
     world_size=4
     processes:list[mp.Process]=[]
     mp.set_start_method("spawn") #XXX spawn method will reimport this script, as to rerun this script again
     # mp.set_start_method("fork") #XXX fork only copy and paste all PCB && TCB from parent process
-    run=blocking_broadcast
+    run=group_blocking_broadcast
     for rank in range(world_size):
         p = mp.Process(target=init_process, args=(rank, world_size, run),
                         kwargs=dict(backend="hccl",dtype=torch.bfloat16,))
