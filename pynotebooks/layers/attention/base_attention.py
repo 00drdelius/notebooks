@@ -1,3 +1,6 @@
+"""
+implement general GQA, tested result with Qwen2 official GQA implementation
+"""
 from typing import *
 
 import torch
