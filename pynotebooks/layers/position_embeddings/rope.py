@@ -102,15 +102,15 @@ class BaseRoPE(nn.Module):
         -x^{(pos_i + head_dim//2)}
         ]
         """
-        bsz, attn_heads, seq_len, head_dim = head_states
+        bsz, attn_heads, seq_len, head_dim = head_states.shape
         cos, sin = position_embeddings
         expanded_cos = cos[:, None, :, :].expand(*[-1, attn_heads, -1, -1])        
-        expaned_sin = sin[:, None, :, :].expand(*[-1, head_dim, -1, -1])
+        expaned_sin = sin[:, None, :, :].expand(*[-1, attn_heads, -1, -1])
 
         apply_cos = head_states * expanded_cos
         
         def rotate_half(x:torch.Tensor):
-            return torch.cat([-x[:, head_dim//2:], x[:, :head_dim//2]], dim=-1)
+            return torch.cat([-x[..., head_dim//2:], x[..., :head_dim//2]], dim=-1)
 
         apply_sin = rotate_half(head_states) * expaned_sin
 
@@ -124,8 +124,6 @@ def test():
     torch.set_default_device("cuda:0")
     my_rotary_embd = BaseRoPE(my_llm_config)
     qwen2_rotary_embd = Qwen2RotaryEmbedding(my_llm_config)
-    my_rotary_embd = cast(CallableModule, my_rotary_embd)
-    qwen2_rotary_embd = cast(CallableModule, qwen2_rotary_embd)
 
     # test inv freq
     print("[qwen2 inv freq] ", qwen2_rotary_embd.inv_freq)
@@ -144,5 +142,19 @@ def test():
     print("[cos equal] ",torch.allclose(my_cos, qwen2_cos))
     print("[sin equal] ", torch.allclose(my_sin, qwen2_sin))
 
+    # test apply position embeddings
+    head_dim = my_rotary_embd.head_dim
+    query_states = torch.randn(bsz, my_llm_config.num_attention_heads, seq_len, head_dim, dtype=torch.bfloat16)
+    key_states = torch.randn(bsz, my_llm_config.num_key_value_heads, seq_len, head_dim, dtype=torch.bfloat16)
+    print("[query_states shape] ",query_states.shape)
+    print("[key_states shape] ",key_states.shape)
+
+    qwen2_query_states, qwen2_key_states = apply_rotary_pos_emb(query_states, key_states, qwen2_cos, qwen2_sin)
+
+    my_query_states = my_rotary_embd.apply_position_embeddings(query_states, (my_cos, my_sin))
+    my_key_states = my_rotary_embd.apply_position_embeddings(key_states, (my_cos,my_sin))
+
+    print("[query states equal] ",torch.allclose(qwen2_query_states, my_query_states))
+    print("[key states equal] ",torch.allclose(qwen2_key_states, my_key_states))
 
 test()
