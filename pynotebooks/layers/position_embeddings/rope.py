@@ -6,11 +6,10 @@ Refer more to the following url:
 3. different implementation styles brief: https://anyinlover.github.io/blog/deep_learning/deepseek_rope
 """
 
+from typing import *
+
 import torch
 import torch.nn as nn
-
-from transformers.models.qwen2.modeling_qwen2 import Qwen2RotaryEmbedding
-
 from transformers.models.qwen2 import Qwen2Config
 
 my_llm_config = Qwen2Config(
@@ -25,11 +24,15 @@ my_llm_config = Qwen2Config(
     tie_word_embeddings=False,
     use_sliding_window=False,
 
-    attn_bias = False
+    attn_bias = False,
+    rope_type="default",
 )
-
+CallableModule: TypeAlias = Callable[[torch.Tensor], tuple[torch.Tensor, torch.Tensor]]
 
 class BaseRoPE(nn.Module):
+    # 2. Type hint the buffer to fix linting/MyPy errors regarding 'register_buffer'
+    inv_freq: torch.Tensor
+
     def __init__(self, llm_config:Qwen2Config):
         super().__init__()
         self.head_dim = getattr(llm_config, "head_dim", llm_config.hidden_size // llm_config.num_attention_heads)
@@ -46,11 +49,11 @@ class BaseRoPE(nn.Module):
         i \\in [1, 2, ..., head_dim//2]
         $$
         """
-        inv_freq = torch.pow(self.rope_theta, torch.arange(0, self.head_dim//2, dtype=torch.int32)*2//self.head_dim)
-        self.inv_freq = torch.pow(inv_freq.float(torch.float32), -1)
-        self.register_buffer("inv_freq", self.inv_freq)
+        inv_freq = torch.pow(self.rope_theta, torch.arange(0, self.head_dim//2, dtype=torch.int32)*2/self.head_dim)
+        inv_freq = torch.pow(inv_freq.float(), -1)
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
 
-    def forward(self, hidden_states:torch.Tensor):
+    def forward(self, hidden_states:torch.Tensor)->tuple[torch.Tensor, torch.Tensor]:
         """
         construct:
         1. cos[
@@ -69,16 +72,18 @@ class BaseRoPE(nn.Module):
         expanded_inv_freq = self.inv_freq[None, None, :].expand(*[bsz, 1, -1])
         # expand position ids to [bsz, seq_len, 1]
         expanded_position_ids = torch.arange(
-            seq_len)[None, :, None].expand(*[bsz, -1, 1])
+            seq_len)[None, :, None].expand(*[bsz, -1, 1]).float()
+        print("[size of expanded inv_freq] ",expanded_inv_freq.shape)
+        print("[size of expanded_position_ids] ",expanded_position_ids.shape)
 
-        with torch.autocast(device_type=hidden_states.device, dtype=torch.float32):
+        with torch.autocast(device_type=hidden_states.device.type, dtype=torch.float32):
             #NOTE you don't need to manually convert tensor dtype to float32 and device to the same here,
             # torch.autocast does these conversions automatically.
             half_idx_theta = expanded_position_ids @ expanded_inv_freq
             idx_theta = torch.cat([half_idx_theta, half_idx_theta], dim=-1)
         
-        cos = idx_theta.cos()
-        sin = idx_theta.sin()
+        cos = idx_theta.cos().to(dtype=hidden_states.dtype)
+        sin = idx_theta.sin().to(dtype=hidden_states.dtype)
         return cos, sin
 
     @classmethod
@@ -110,3 +115,34 @@ class BaseRoPE(nn.Module):
         apply_sin = rotate_half(head_states) * expaned_sin
 
         return apply_cos+apply_sin
+
+
+from transformers.models.qwen2.modeling_qwen2 import Qwen2RotaryEmbedding, apply_rotary_pos_emb
+
+# test precision
+def test():
+    torch.set_default_device("cuda:0")
+    my_rotary_embd = BaseRoPE(my_llm_config)
+    qwen2_rotary_embd = Qwen2RotaryEmbedding(my_llm_config)
+    my_rotary_embd = cast(CallableModule, my_rotary_embd)
+    qwen2_rotary_embd = cast(CallableModule, qwen2_rotary_embd)
+
+    # test inv freq
+    print("[qwen2 inv freq] ", qwen2_rotary_embd.inv_freq)
+    print("[my inv freq] ", my_rotary_embd.inv_freq)
+    inv_freq_equal = torch.allclose(qwen2_rotary_embd.inv_freq, my_rotary_embd.inv_freq)
+    print("[inv_freq equal] ",inv_freq_equal)
+
+    # test cos and sin
+    bsz, seq_len, hidden_size = 5, 1024, my_llm_config.hidden_size
+    hidden_states = torch.randn(size=[bsz, seq_len, hidden_size], dtype=torch.bfloat16)
+    my_cos, my_sin = my_rotary_embd(hidden_states)
+
+    position_ids=torch.arange(seq_len)[None, :].expand(*[bsz,-1])
+    qwen2_cos, qwen2_sin = qwen2_rotary_embd(hidden_states,position_ids)
+
+    print("[cos equal] ",torch.allclose(my_cos, qwen2_cos))
+    print("[sin equal] ", torch.allclose(my_sin, qwen2_sin))
+
+
+test()
