@@ -12,5 +12,9 @@ else:
 
 ## NOTE
 You may refer more to the following url for details:
+1. first MoE application in LLM: https://arxiv.org/pdf/2101.03961
+
+
+## current tested implementations
 1. [Dense FFN, Multi-Layer Perceptron](./mlp.py)
 2. [Sparse FFN, Mixture of Experts](./moe.py)

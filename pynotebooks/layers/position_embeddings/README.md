@@ -16,6 +16,6 @@ You may refer more to the following url for RoPE math details:
 2. improved implementation: https://nn.labml.ai/transformers/rope/index.html
 3. different implementation styles brief: https://anyinlover.github.io/blog/deep_learning/deepseek_rope
 
-## current tested implementations:
+## current tested implementations
 1. [basic rotary position embeddings](./basic_rope.py)
 

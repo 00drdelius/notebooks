@@ -14,5 +14,5 @@ else:
 You may refer more to the following url for details:
 1. original paper: https://arxiv.org/pdf/2305.13245
 
-## current tested implementations:
+## current tested implementations
 1. [Grouped Query Attention](./basic_attention.py)
