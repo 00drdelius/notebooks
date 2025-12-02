@@ -11,7 +11,7 @@ else:
 ```
 
 ## NOTE
-You may refer more to the following url for RoPE math details:
+You may refer more to the following url for details:
 1. original paper: https://arxiv.org/pdf/2305.13245
 
 ## current tested implementations:
