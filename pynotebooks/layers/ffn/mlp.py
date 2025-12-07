@@ -1,4 +1,6 @@
-from transformers.models.qwen2 import Qwen2Config
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from transformers.models.qwen3_moe import Qwen3MoeConfig
 
 # general
@@ -39,29 +41,29 @@ my_llm_moe_config = Qwen3MoeConfig(
     intermediate_size=hidden_size*3,
     moe_intermediate_size=hidden_size*3//num_experts_per_token,
     num_experts_per_tok=num_experts_per_token,
-    num_experts=num_experts,
+    num_experts=128,
 
     tie_word_embeddings=tie_word_embeddings,
 
     use_cache=False,
 )
 
-my_llm_config = Qwen2Config(
-    vocab_size=vocab_size,
-    hidden_size=hidden_size,
 
-    rope_theta=rope_theta,
-    max_position_embeddings=max_position_embeddings,
+class BaseMLP(nn.Module):
+    def __init__(self, llm_config:Qwen3MoeConfig):
+        super().__init__()
+        self.gate_proj = nn.Linear(llm_config.hidden_size, llm_config.intermediate_size, bias=False)
+        self.up_proj = nn.Linear(llm_config.hidden_size, llm_config.intermediate_size, bias=False)
+        self.down_proj = nn.Linear(llm_config.intermediate_size, llm_config.hidden_size, bias=False)
+        match llm_config.hidden_act:
+            case _:
+                self.hidden_act = F.silu # set silu as default
+        
+    def forward(self, hidden_states:torch.Tensor):
+        hidden_states = self.down_proj(self.hidden_act(self.gate_proj(hidden_states) * self.gate_proj(hidden_states)))
+        return hidden_states
 
-    use_sliding_window=use_sliding_window,
-    num_attention_heads=num_attention_heads,
-    num_key_value_heads=num_key_value_heads,
-    attn_bias = attn_bias,
-
-    intermediate_size=hidden_size*3,
-    hidden_act=hidden_act,
-
-    tie_word_embeddings=tie_word_embeddings,
-
-    use_cache=False,
-)
+# test precision
+"""
+don't think there's any necessary to match MLP precision
+"""

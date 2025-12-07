@@ -1,5 +1,8 @@
-from transformers.models.qwen2 import Qwen2Config
+import torch
+import torch.nn
+
 from transformers.models.qwen3_moe import Qwen3MoeConfig
+from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeSparseMoeBlock
 
 # general
 vocab_size = 151936
@@ -39,29 +42,12 @@ my_llm_moe_config = Qwen3MoeConfig(
     intermediate_size=hidden_size*3,
     moe_intermediate_size=hidden_size*3//num_experts_per_token,
     num_experts_per_tok=num_experts_per_token,
-    num_experts=num_experts,
+    num_experts=128,
 
     tie_word_embeddings=tie_word_embeddings,
 
     use_cache=False,
 )
 
-my_llm_config = Qwen2Config(
-    vocab_size=vocab_size,
-    hidden_size=hidden_size,
 
-    rope_theta=rope_theta,
-    max_position_embeddings=max_position_embeddings,
 
-    use_sliding_window=use_sliding_window,
-    num_attention_heads=num_attention_heads,
-    num_key_value_heads=num_key_value_heads,
-    attn_bias = attn_bias,
-
-    intermediate_size=hidden_size*3,
-    hidden_act=hidden_act,
-
-    tie_word_embeddings=tie_word_embeddings,
-
-    use_cache=False,
-)
