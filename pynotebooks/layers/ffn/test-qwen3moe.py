@@ -50,12 +50,12 @@ my_llm_moe_config = Qwen3MoeConfig(
 )
 
 def test():
-    torch.set_default_device("cuda:0")
+    torch.set_default_device("cpu")
     qwen3moe_block = Qwen3MoeSparseMoeBlock(config=my_llm_moe_config).eval()
     print(qwen3moe_block)
-    bsz, seq_len, hidden_size = 4, 1024, my_llm_moe_config.hidden_size
+    bsz, seq_len, hidden_size = 3, 11, my_llm_moe_config.hidden_size
     hidden_states = torch.randn(size=(bsz, seq_len, hidden_size), dtype=torch.bfloat16)
-    with torch.autocast(device_type="cuda:0",dtype=torch.bfloat16):
+    with torch.autocast(device_type="cpu",dtype=torch.bfloat16):
         output = qwen3moe_block(hidden_states)
 
     print(output)
